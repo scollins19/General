@@ -1,0 +1,227 @@
+---
+title: "MA5107 - Maftools Exercise"
+author: "Sarah Collins - 14309361"
+date: "15 February 2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#### <b> 1. Install the 'maftools' package </b>
+'maftools' is an R package that is used to analyse somatic varient data in Mutation Annotation Format (MAF). This package permits the efficient annotation and visualisation of summarised MAF files in coordination with sources from The Cancer Genome Atlas (TCGA) as well as independent studies that have implemented the MAF format to their data.
+
+
+```{r}
+library(maftools) # Load maftools library
+```
+
+
+---
+
+
+#### <b> 2. Read in the data </b>
+
+Somatic variants from pancreatic cancer samples are summarised from the MAF table at:
+
+http://maths.nuigalway.ie/~cathal/Temp/somatic.mafplus
+
+The 'read.maf' function allows R to take in maf files and produces them in a table: 
+
+```{r}
+data = read.maf('somatic.mafplus') 
+```
+
+
+
+
+--- 
+
+
+
+
+#### <b> 3. How many somatic mutations are there in this dataset? How many genes are affected? </b>
+
+
+When the data is translated to a table in R, it becomes a MAF object which is composed of a summary of the data, the maf file itself, and any corresponding annotations. The summary statistics are created as an output automatically when the MAF object is created as seen in part 2, but can also be reproduced by calling on the named MAF object.
+
+From the table created in part 2, we can see that there are somatic <b> 760 mutations </b> in total within the samples, with <b> 483 </b> genes being affected.
+
+
+
+#### <b> 4. Produce a mafSummary plot and reproduce it here. What is the most mutated gene? Investigate whether there is any known association between this gene and pancreatic cancer. </b>
+
+
+The 'plotmafSummary' function produces several graphs relating to the variants within the samples. The first two stacked barplots produced show the distribution of variants among the samples by classifcation and particular type of mutation. A barplot demonstrating the number of certain SNPs occuring is also created, along with a barplot highlighted the top 10 mutated genes within the samples
+
+Each of the grapphs clearly demonstrate the the majority of mutations occuring in the samples are missense mutations. From the 'Top 10 Mutated Genes' graph, it is evident that MUC4 is the most frequently mutated gene. The MUC4 gene is a protein coding gene that is responsible for creating mucin proteins that are predominantly found in mucus. Mucins are glycoproteins that are essential for epithelial cell protection. Pacreatic cancer has been characterised by the overexpression of mucins, with MUC4 specifically exhibiting a significant differential expression allowing it to have a functional role in disease progression and resistance to therapy. Recently, studies have identified that diminished MUC4 expression decreases proliferation and metastasis of pancreatic cancer cells, as well as illustrating enhanced sensitivity to therapeutic agents (Guatam et al., 2017).
+
+
+
+```{r}
+plotmafSummary(maf = data, 
+               rmOutlier = TRUE, #Removes outliers 
+               addStat = 'median', #Includes median line of sample where applicable
+               dashboard = TRUE, 
+               titvRaw = FALSE) #Plots fractions instead of raw counts
+```
+
+
+---
+
+
+#### <b> 4. Produce a lollipop plot for MUC4 in the pancreatic samples </b>
+
+Lollipop plots allow for visualisation of each mutation position along the protein structure by idenitfying mutational hotspots and marking them accordingly. The function requires the maf file to contain the information on the amino acid changes under a particular column name, which depends on the file itself, that can be specified by the option 'AACol'. A singular gene can be specified to visualise alone and labels can also be assigned to each mutation position. If several trascripts are available, a specific transcript can be defined by 'refSeqID' or 'proteinID'.
+
+From the lollipop graph we can see that while several mutations are visible along the gene, none occur within the known functional domains of the gene.  
+
+
+```{r}
+lollipopPlot(maf = data, 
+             gene = 'MUC4', #Specify that we only want to view the MUC4 gene
+             AACol = 'Protein Change', #Indicates the column in the maf file
+             showDomainLabel = FALSE, #If set to false, domain names are shown in legend
+             labelPos = 'all') #Labels all the mutional changes 
+```
+
+
+
+---
+
+
+#### <b> 5. Produce a plot of mutation types using plotTiTv. Which mutation type is most common in the pancreatic samples? </b>
+
+The 'titv' function classifies SNPs according to whether they are transitions (changes within purines or pyrimidines indepndently) or traversions (changes between purines and pyrimidines and vice versa). A summary of the abundance of each SNP type is then produced as a boxplot to determine the distribution of the conversions in each sample. From this boxplot produced, it is evident that T>C transitions are the most common among the samples, closely followed by C>T transitions.
+
+
+
+
+```{r}
+#Initially make the transition/transversion summary data
+
+data.titv = titv(maf = data, 
+                 plot = FALSE, #Refrains from plotting titv fractions
+                 useSyn = TRUE) #Includes synonymous various
+
+plotTiTv(res = data.titv) #Takes results from 'titv' and plots the ratios of conversions in each sample
+```
+
+
+---
+
+
+#### <b> 6. How does the mutation rate per Mb in the Texas samples compare to the rate in the TCGA cohorts? Produce a plot to illustrates this comparison. </b>
+
+It can be useful to compare how the somatic mutation rates among samples compare against cohorts within The Cancer Genome Atlas to gain perspective on the sample cohort. The 'tcgaCompare' function performs this by creating a distribution plot of over 10,000 whole exome sequencing samples across 33 TCGA cohorts. The log10 value of mutations per sample in each cohort is represented on the Y axis. 
+
+From this graph, the sample cohort has a similar value of mutations per sample to ~10 TCGA cohorts that appear in the predominant half of the graph. This is of considerable interest as the PC samples had a median of 61.0 mutations within 9 samples, while other cohorts with similar medians had a larger sample size.
+
+
+```{r}
+tcgaCompare(data, # MAF file
+            cohortName = 'PC Texas Samples', #Input name visible on graph
+            primarySite = FALSE, #Uses project names as labels instead of cancer sites
+            col = c("slategray2", "midnightblue"), 
+            medianCol = "red", 
+            fontSize = 10)
+```
+
+
+---
+
+
+#### <b> 7. Are there any mutations that tend to co-occur/tend not to co-occur in the pancreatic cancer samples? Produce a plot to illustrate these. </b>
+
+Particular sets of genes in cancer appear to be either co-occuring or have a strong exclusivity signature in their mutation patterns. The 'somaticInteractions function can visualise these gene sets by performining a pair-wise Fisher's Exact test to detect them. As well as this, a cometExactTest is also performed to identify gene sets that may be altered involving more than two genes. The table is then colour coordinated to represet events of co-occurence (green) and exclusivity (purple). The significance of the p-value of each set is then depicted by the intensity of each colour on the graph, with the more intense illustrating increased significance.
+
+By setting the parameter to only look within the top 30 genes, 4 gene sets were identified with only two gene sets being slightly below the 0.05 significance level. Both gene sets included MUC4 and RANBP2 (a RAN binding protein), with only the third gene altering between LSR and NBF10. However, both gene sets had a pvalue of 0.046, which is considerably close to the 0.05 significance level. Therefore, further conformation of the significance of the gene sets would probably be needed. 
+
+Several gene pairs were also identified as being significant at the p<0.05 level, with 3 of these being noteworthy co-occuring pairs. These include 'KRTAP4-7 & KRTAP4-11', 'PRG4 KRTAP4-11', and 'PRG4 KRTAP4-7'. Each of these pairs had identical p-values at 0.011904. 
+
+
+```{r}
+somaticInteractions(maf = data, 
+                    top = 30, #Only searches within the top 30 genes
+                    pvalue = c(0.05, 0.1), #Sets the pvalues at 0.1 and a more stringent 0.05
+                    fontSize = 0.5)
+```
+
+
+The results from above can then be visualised more effectively using the 'oncostrip' function, which displays the correlation of mutations in the genes among the samples. By taking the first gene set identified, it is evident that mutations were predominant among the RANBP2 and MUC4 genes in the samples, with several instances in NBF10 occuring also. The plot can also provide information on the type of mutation occuring, this case showing all missense mutaitons.
+
+```{r}
+oncostrip(maf = data, genes = c('RANBP2','MUC4', 'NBPF10'))
+```
+
+
+
+---
+
+
+
+#### 8. <b> Are any of the actionable variants in Onkokb found in any of the Texas samples? </b> 
+
+There are several approaches that can be used to successfully annotate DNA alterations present in samples including interactive web interfaces of online databases, such as OncoKB. OncoKB combines data representing alterations in 595 cancer genes and categorises them by biological effect, prevelance, prognostic information, and treatment implications. Treatment information is classified using the Levels of Evidence system which assigns the clinical actionability (ranging from standard-of-care to investigational or hypothetical treatments) to individual mutational events.
+
+While OncoKB, provides a useful online interface, analysing multiple genes can become time consuming. The Drug-Gene Interaction database (DGIdb) accumulates data from 15 different resources to allow for effective analysis and identification of drugs for putative target alterations. rDGIdb is a wrapper to query DGIdb using R/Bioconductor. The package provides itsoutput in a similar format as the web interface, and thereby allows integration of DGIdbqueries into bioinformatic pipelines using large datasets.
+
+
+By using the 'queryDGIdb' function, it is possible to identify genes in our samples that are regarded as actionable in OncoKb. From the PC MAF data, the KRAS gene matched several drugs within the database.
+
+```{r}
+library(rDGIdb) #Load rDGIdb library
+
+actionable_samples <- queryDGIdb(genes = data@gene.summary$Hugo_Symbol, 
+                                 #Takes the gene list from the maf file.
+                                 sourceDatabases = 'OncoKB', 
+                                 #Searches OncoKB specifically
+                                 geneCategories = 'CLINICALLY ACTIONABLE') 
+                                #Only returns clinically actionable matches.
+```
+
+
+The output from the previous function can then be effectively viewed using the 'resultSummary' command, which produces a table of actionable genes with their corresponding target drugs defined by OncoKB
+
+```{r}
+#resultSummary(actionable_samples) 
+
+# I commented this out as it produces a large output within the PDF
+# The resulting table identifies 15 drugs within OncoKB that target a KRAS alteration
+
+```
+
+
+To get a better understanding of the alterations within the KRAS gene, a lollipop plot can be created, as before, to visualise the amino acid changes. From this, an amino acid change of glycine to aspartic acid can be viewed at positon 12 in the protein sequence. This is potentially of significance as the change occurs from the smallest, aliphatic amino acid to a larger, negatively charged acidic amino acid.
+
+```{r}
+lollipopPlot(maf = data, 
+             gene = 'KRAS', #Specify that we only want to view the KRAS gene
+             AACol = 'Protein Change', #Indicates the column in the maf file
+             showDomainLabel = FALSE, #If set to false, domain names are shown in legend
+             labelPos = 'all')
+```
+
+
+--- 
+
+##### Specific actionable variant (Figure 1):
+
+Now that the specific amino acid change is identifies, we can refer back to OncoKB to identify potential treatments on the variant itself. From the OncoKB web interface, the G12D alteraction appears to have been noted 444 times within the database. 
+
+Of these, drug therapies are classified by two cancer types, these being colrectecal cancer specifically at an R1 level of evidence ('Standard of care biomarker predictive of resistance to an FDA-approved drug in this indication'), as well as 'all tumuors' at the 4th level of evidence ('Compelling biological evidence supports the biomarker as being predictive of response to a drug but neither biomarker and drug are standard of care').
+
+
+
+
+
+ ![OncoKB entry for G12D mutation in KRAS](KRAS.png)
+
+
+
+
+
