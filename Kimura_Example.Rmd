@@ -1,0 +1,118 @@
+---
+title: "Kimura 2 Parameter Model Example"
+author: "Sarah Collins"
+date: "12 March 2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+*Write a programme in the language of your choice that will produce a maximum likelihood estimate of the genetic distance between a pair of (aligned) DNA sequences under the Kimura 2-parameter model of nucleotide substitution (this model has separate parameters for transition and transversion mutations but equal equilibrium frequencies for all nucleotides).  Your code should include  steps  to  scale  the  generator  matrix  appropriately  and  calculate transition probability matrices as a function of the genetic distance.You can make use of optimisation libraries (e.g.  optim in R) to obtain the maximum likelihood estimate of the genetic distance, given a pair of aligned input sequences (in a format of your choice).  Test your function on the pair of sequences below using the formula:*  
+
+d=(−1/2)ln((1−2p−q)sqrt(1−2q))  
+
+*where d is the genetic distance, p is the proportion of sites that differ by a transition and q is the proportion of sites that differ by a transversion.* 
+
+
+In order to determine the genetic distance of a pair of sequences, we can use the transition probability matrix of the bases which is determined via the exponential of the generator matrix multiplied by time, such that: 
+
+P(t) = e^t*G^ , where t is equivalent to the genetic distance and G is the generator matrix corresponding to the Kimura two-parameter model
+
+```{r}
+library(expm)
+```
+
+
+```{r}
+# Define both sequences 
+seq1 <- c("A", "G" , "T", "C" ,"C" ,"A", "T", "G" ,"A", "T")
+
+seq2 <- c("A", "C" , "G", "T" ,"C" ,"G", "T", "G" ,"C", "T")
+
+
+# Generator matrix for Kimura model with two parameters, sigma and kappa (denoted by s and k)
+# Rows of the generator matrix sums to 0
+# Matrix is also symmetric
+Gen <- matrix(c('-2s-ks','s','ks','s','s','-2s-ks','s','ks','ks','s','-2s-ks','s','s','ks','s','-2s-ks'), byrow = TRUE, nrow=4)
+
+rownames(Gen)<- c("A","C","G","T")
+colnames(Gen)<- c("A","C","G","T")
+
+Gen
+```
+
+---
+
+Liklihood of the sequences:
+```{r}
+
+#Create a function that will take in both sequences
+LLfunc <- function(pars, x, y){
+  k = pars[1] # Parameter to allow for optimisation of kappa
+  t = pars[2] # Parameter to allow for optimisation of time (i.e., genetic distance)
+  s = (1/(2+k)) #Sigma can be given in terms of kappa as the sum of the off diagonals within 
+  # the Kimura generator matrix equal to 1. Therefore we only need to optimise for kappa.
+  pi = 0.25 # Equal stationary distributions of the bases
+  
+  
+  #Create the generator Matrix 
+  G <- matrix(c(-2*s-k*s,s,k*s,s,s,-2*s-k*s,s,k*s,k*s,s,-2*s-k*s,s,s,k*s,s,-2*s-k*s),byrow=TRUE, nrow=4)
+  rownames(G)<- c("A","C","G","T")
+  colnames(G)<- c("A","C","G","T")
+  
+  # Rescaling factor
+  B <- 1/(-pi*4*G[1,1]) 
+  # Calcuating a direct Hamming distance between sequences can sometimes be innaccurate due to
+  # homoplasy. Instead, branch lengths are represented by determining the number of changes per
+  # sites.
+  # Beta can be determined by forcig the expected rate of flux of states to 1, with the 
+  # diagonal entries of the generator matrix indicating the -1 times probability of leaving a 
+  # state. The sum of these entries calculated with their weighed stationary distribution can 
+  # determine the scaling factor where the process will have an expected flux of one.
+
+ 
+  # Get TPM 
+  TPM <- expm(t*G*B) #The TPM can therefore be calculated following rescaling to be formated as   # a function of genetic distance
+  
+  # Calculate the log liklihood of the sequences
+  # This can be done by determining the probability of transitioning from one sequence to the 
+  # next and then determining the sum of the log of thse values
+  count <- 0 
+  
+  for(i in 1:10) 
+    count = count + log(TPM[(x[i]),(y[i])])
+    
+  return(count)
+  }
+```
+
+
+Next, we can use the *'optim'* function in R to determine the maximum liklihood estimates for the genetic distance and kappa by providing an initial set of parameters. By default optim performs minimization, but it will maximize if *fnscale* is negative.   
+
+```{r}
+optim(c(0.4,0.5),LLfunc,x=seq1, y=seq2, control=list(fnscale=-1))$par  
+```
+
+
+Following optimisation, the maximum liklihood estimate for kappa is 1.6, while the estimated time/genetic distance of the sequences is specified as 0.83.  
+
+
+We can simply correlate this answer by using the formula for the Kimura Two-Paramater distance which uses parameters **p** & **q**, where where p is the proportion of sites that show transitional differences and q is the proportion of sites that show transversional differences. 
+```{r}
+# Transitions observed twice in sequences of length 10
+p <- 1/5
+
+# Transversions observed three times in sequences of length 10 
+q <- 3/10
+
+
+t <- -(1/2)*(log((1-2*p-q)*sqrt(1-2*q)))
+t
+```
+
+
+From this equation it is also observed that the genetic distance (t) of the sequences is 0.83, indicating further supporting the maximum liklihood estimate calculation.
