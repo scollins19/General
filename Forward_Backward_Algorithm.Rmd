@@ -1,0 +1,218 @@
+---
+title: "Example of Forward/Backward Algorithm"
+author: "Sarah Collins"
+date: "20 February 2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#### Q:
+
+*'A patient suffers from an autoimmune condition characterised by intermittent ‘flare-ups’, followed by periods of reduced symptoms.  When the condition isin the active state (i.e.  during flare-ups) the patient’s blood platelet levelstend to be in the low range (below 100,000 platelets per microlitre of blood), whereas,  generally  her  platelet  counts  are  in  the  intermediate  (100,000  -150,000)  or  normal  (150,000  -  450,000)  ranges. The  durations  of  the  active  and  dormant  phases  are  both  geometrically  distributed  with  means  2 months and 5 months, respectively.  The patient’s blood platelet counts have been determined at monthly intervals as shown below.*  
+
+*If the probability of platelet levels in the low, intermediate and high ranges is, respectively, 0.7,0.2, 0.1 in the active state and 0.2, 0.3 and 0.5 in the dormant state, what is the probability that the autoimmune condition is active in month 6 (i.e.when the platelet count is 204)?  You may assume that each measurement is independent of all other measurements, conditional on whether the patient is in the active or dormant state, and that the probability that the patient begins in the active state is equal to the stationary probability of the active state' *
+
+
+*Platelet counts in successive months (in 000’s per microlitre): 95, 160, 148, 88, 180, 204, 162, 141 *
+
+
+---
+
+
+```{r}
+platelet_count <- c(95, 160,148, 88,180,204,162,141)
+
+platelet_state <- c("Low", "High", "Int", "Low",  "High", "High", "High", "Int")
+
+emissionProb <- matrix(c(0.7,0.2,0.2,0.3,0.1,0.5),2,3)
+rownames(emissionProb) <- c("Active", "Dormant")
+colnames(emissionProb) <- c("Low", "Int", "High")
+
+emissionProb
+```
+
+
+--- 
+
+For a Hidden Markov model, a state which has is geometric distributed is given by:  
+= 1/P.    
+
+For the active state, the mean duration of the state is 2 months, so:    
+
+2= 1/(P)   
+**p=0.5**
+
+Therefore, the probability of exiting the active state is given as 0.5 while the probability of staying in the active state is also 0.5 (equals to 1).
+
+The same rule can apply for the dormant state for which is mean duration of being in the state is 5 months: 
+
+Dormant:   
+5=1/P   
+**p=0.2**
+
+So the probability of exiting the dormant state is given as 0.2, while the probability of staying in the dormant to active state is 0.8
+
+These values therefore give us our transitioin probability matrix:
+
+```{r}
+#Transition Probabiity Matrix
+
+TPM <- matrix(c(0.5,0.2,0.5,0.8),2,2)
+colnames(TPM) <- c("Active","Dormant")
+rownames(TPM) <- c("Active", "Dormant")
+TPM
+
+
+#Stationary Distribution
+
+V=eigen(t(TPM))$vectors[,1] #Get eigen vector
+pi=V/(sum(V)) #Rescale to get probabilities where lambda = 1 (col 1)
+
+pi
+
+```
+
+
+--- 
+
+##### Forward approach:
+
+For this problem we can use the Forward-Backward Algorithm:
+
+For each process, the probabilities of each state need to be accounted for, where the probability of the initial state is equal to the stationary distribution of that state, multiplied by the emission probability of the observation.   
+
+For both active and dormant states, we need to calculate the probability of all paths ending in the desired position, taking into acount whether the current position came from the active or dormant state.
+
+```{r}
+# First, we determine the probability of our inital positions for active and dormant:
+# This is set up as a vector in order to add each probability onto it as we move to 
+# the next state.
+
+f_prob_A = c(pi[1]*(emissionProb["Active","Low"]))
+f_prob_D = c(pi[2]*(emissionProb["Dormant","Low"]))
+
+
+#Since we already know the first position probability, our function can start from [2]:
+
+for(i in 2:8){
+  # Set up loop for the active state 
+  state_f_a <- (emissionProb["Active",platelet_state[i]])* #Emission of position in Active
+    (((f_prob_A[i-1])* # Prob of the previous position in active
+       (TPM["Active","Active"]))+ # Prob of staying in the active state
+      ((f_prob_D[i-1])* # Prob of the previous position in dormant
+         (TPM["Dormant","Active"])))
+  
+  
+  # Set up loop for dormant state
+  # This is nearly identical to the previous, but the states are switched as it takes
+  # into account that you are currently in the dormant state
+  state_f_d <- (emissionProb["Dormant",platelet_state[i]])*
+    (((f_prob_D[i-1])*
+        (TPM["Dormant","Dormant"]))+
+       ((f_prob_A[i-1])*
+          (TPM["Active","Dormant"])))
+  
+    # This appends the inital vector to add the probability of the current state of the
+    # loop, and the loop begins again
+    f_prob_A <- append(f_prob_A, state_f_a)
+    f_prob_D <- append(f_prob_D, state_f_d)
+     
+}            
+            
+f_prob_A # The probability of each position in the active state
+
+f_prob_D # The probabilty of each position in the dormant state
+
+   
+```
+
+
+
+--- 
+
+#### Backward approach
+
+Next, we need to calculate the Backward algorithm:
+
+This is similar to the Forward, although for each position in a given state, the emission probability of both states in the next position need to be taken into account , not just the emission probability of the current state as in the Forward algorithm. For example, if the current state is A[6], the algorithm depends of A[7].
+
+Therefore, in this case, the probability of being in state [8] is 1, and no other information is given about the sequence following that state. 
+
+
+```{r}
+# First start by reversing the sequence of observations
+# This will allow for state[8] to be written as state[1] within the code
+obs_rev <- rev(platelet_state)
+
+
+# Like before, the probability of the initial state is taken into account
+b_prob_A = c(1)
+b_prob_D = c(1)
+
+
+# The range is 2:3 as we are only interested in states [7] & [6], since the chain is
+# reversed, these correspond to [2] & [3] respectively 
+# Also, since the observations are in reverse, the current state will now depend on the 
+# previous postion [i-1], instead of the following position as stated.
+
+for(i in 2:3){
+
+  state_b_a <- (emissionProb["Active",obs_rev[i-1]])* # Emission prob of previous position
+                                                      # active state
+    
+    (b_prob_A[i-1])* # Prob of being in the previous position in the active state
+    (TPM["Active","Active"]) + # Prob of staying in the active state
+    (b_prob_D[i-1])*(TPM["Active","Dormant"])* # Prob of the previous position in dormant
+    emissionProb["Dormant",obs_rev[i-1]] # Emission prob of previous position in dormant                                           # state
+  
+  #Like the forward, the dormat path is similar to the active, but the dependcies 
+  # of states are different
+  state_b_d <- (emissionProb["Dormant",obs_rev[i-1]])*
+    (b_prob_D[i-1])*
+    (TPM["Dormant","Dormant"]) +
+    (b_prob_A[i-1])*(TPM["Dormant","Active"])*
+    emissionProb["Active",obs_rev[i-1]]
+  
+    # This appends the inital vector to add the probability of the current state of the
+    # loop, and the loop begins again
+    b_prob_A <- append(b_prob_A, state_b_a)
+    b_prob_D <- append(b_prob_D, state_b_d)
+     
+} 
+
+
+```
+
+
+
+The Forward-Backward Algorithm in the active state is given by:
+
+(P(Forward_active[i])*P(Backward_active[i])) / P(observations)
+
+
+P(observations) can be calculated by the forward algorithm by adding the probabilities of the final position being in the active and dormant state. 
+
+```{r}
+#The prob of the sequence of observations is given by:
+pX <- f_prob_A[8] + f_prob_D[8]
+pX
+```
+
+
+So , we can determine the probability that in month 6 the autoimmune disease is active by:
+```{r}
+
+(f_prob_A[6]* # Prob of month 6 in the forward multiplied by:
+   b_prob_A[3])/ # Prob of month 6 in th backward ([3] here as we reverse,):
+  pX # All divided by the probability of the sequence of observations
+
+```
+
+
+
