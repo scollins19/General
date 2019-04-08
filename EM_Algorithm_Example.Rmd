@@ -1,0 +1,168 @@
+---
+title: "EM Algorithm Example"
+author: "Sarah Collins"
+date: "30 March 2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\begin{center}
+\textbf{Use the EM algorithm to obtain a maximum likelihood estimate of the haplotypes corresponding to the following four-locus genotype data:}
+\end{center}
+
+\begin{center}
+G1:    0    1    1    2  \\
+G2:    1    0    2    2  \\
+G3:    0    1    2    2  \\
+G4:    1    1    2    2  \\
+G5:    1    0    2    2  \\
+\end{center}
+
+\begin{center}
+First, identify all possible haplotypes:  
+\end{center}
+
+\begin{center}
+H1: 0 1 1 1 \\    
+H2: 0 0 0 1 \\
+H3: 0 1 0 1 \\ 
+H4: 1 0 1 1 \\    
+H5: 0 0 1 1 \\  
+H6: 1 1 1 1 \\ 
+\end{center}  
+
+
+Next, identify haplotype pairs for each genotype:   
+
+
+G1 = (H1, H2) & (H3, H5)
+   
+G2 = (H4, H5)
+
+G3 = (H5, H1)
+
+G4 = (H5, H6) & (H4, H1)
+   
+G5 = (H4, H5)
+
+
+
+#### We need to assign an initial haplotype frequency to begin the algorithm. Since there are 6 haplotypes, we will assume that each haplotype has an equal probability, i.e. 1/6.
+
+We need to establish an initial haplotype frequency guess at 1/6, as we have 6 possible haplotypes.
+```{r}
+# get log likelihood of initial frequencies
+num <- seq(1/6,6)
+# From HWE, = 2pq
+L1 <- 2*(((1/6)^2) + ((1/6)^2)) # Prob of Genotype 1
+L2 <- 2*((1/6)^2) # Prob of Genotype 2
+L3 <- 2*((1/6)^2)# Prob of Genotype 3
+L4 <- 2*(((1/6)^2) + ((1/6)^2)) # Prob of Genotype 4
+L5 <- 2*((1/6)^2) # Prob of Genotype 5
+ll <- (log((L1*L2*L3*L4*L5)))
+```
+
+
+E-M algortihm
+```{r}
+# Create a matrix of haplotype frequencies to be filled by EM algorithm
+freqs <- matrix(c(1/6,1/6,1/6,1/6,1/6,1/6,ll),nrow= 11, ncol=7, byrow=TRUE)
+colnames(freqs)<- c('H1','H2','H3','H4','H5','H6','LL')
+
+# Implement Algorithm for 10 Iterations
+for(i in 1:10){
+  
+  # E-step
+  
+  # Probability of haplotype pairs in genotype 1
+  E.g1.1 <- (freqs[i,1]*freqs[i,2])/((freqs[i,1]*freqs[i,2])+(freqs[i,3]*freqs[i,5]))# H1 & H2
+  E.g1.2 <- (freqs[i,3]*freqs[i,5])/((freqs[i,3]*freqs[i,5])+(freqs[i,1]*freqs[i,2]))# H3 & H5
+  
+  E.g2 <- 1 # Probability of haplotype pairs in genotype 2. Only one pair so probability = 1
+  E.g3 <- 1 # Probability of haplotype pairs in genotype 3. Only one pair so probability = 1
+
+  # Probability of haplotype pairs in genotype 4
+  E.g4.1 <- (freqs[i,5]*freqs[i,6])/((freqs[i,5]*freqs[i,6])+(freqs[i,1]*freqs[i,4]))# H5 & H6
+  E.g4.2 <- (freqs[i,1]*freqs[i,4])/((freqs[i,1]*freqs[i,4])+(freqs[i,5]*freqs[i,6]))# H1 & H4
+  
+  E.g5 <- 1 # Probability of haplotype pairs in genotype 5. Only one pair so probability = 1
+   
+  # M-step 
+  # Calculate Haplotype Frequencies
+  freqs[i+1,1] <- (E.g1.1 + E.g3 + E.g4.2)/10 # H1
+  freqs[i+1,2] <- E.g1.1/10 # H2
+  freqs[i+1,3] <- E.g1.2/10 # H3
+  freqs[i+1,4] <- (E.g2 + E.g4.2 + E.g5)/10 # H4
+  freqs[i+1,5] <- (E.g1.2 + E.g2 + E.g3 + E.g4.1 + E.g5)/10 # H5
+  freqs[i+1,6] <- E.g4.1/10 # H6
+  
+  #Log likelihood
+  #First Calculate Genotype Probabilities
+  L1 <- 2*((freqs[i+1,1]*freqs[i+1,2]) + (freqs[i+1,3]*freqs[i+1,5])) # Prob of Genotype 1
+  L2 <- 2*(freqs[i+1,4]*freqs[i+1,5]) # Prob of Genotype 2
+  L3 <- 2*(freqs[i+1,1]*freqs[i+1,5] )# Prob of Genotype 3
+  L4 <- 2*((freqs[i+1,5]*freqs[i+1,6]) + (freqs[i+1,4]*freqs[i+1,1])) # Prob of Genotype 4
+  L5 <- 2*(freqs[i+1,4]*freqs[i+1,5]) # Prob of Genotype 5
+  
+  # Now Calculate the log liklihood of the genotype probabilities 
+  freqs[i+1,7] <- (log((L1*L2*L3*L4*L5)))
+
+}
+```
+
+```{r}
+# Round to 3 decimel places
+freqs <- format(round(freqs, 3), nsmall = 3)
+```
+
+Frequency table where the rows equal to each iteration of the algorithm, and the final column identifies the log likelihood of the haplotype frequencies. 
+
+```{r}
+library(kableExtra)
+freqs %>%
+  kable( "latex", booktabs = T) %>% 
+  kable_styling(latex_options = "striped", full_width = TRUE)
+```
+
+From the correspoding frequency table we can identify that the algorithm has coverges over the haplotype frequencies of H1, H3, H4 and H5. From this, we can identify the most likely haplotype pairs for each genotype as follows: 
+
+\textbf{G1 = (H3, H5):} 
+\begin{center}
+H3: 0 1 0 1 \\ 
+H5: 0 0 1 1 \\  
+\end{center}
+
+\textbf{G2 = (H4, H5):} 
+\begin{center}
+H4: 1 0 1 1 \\ 
+H5: 0 0 1 1 \\  
+\end{center}
+
+\textbf{G3 = (H1, H5):} 
+\begin{center}
+H1: 0 1 1 1\\ 
+H5: 0 0 1 1 \\  
+\end{center}
+
+\textbf{G4 = (H1, H4):} 
+\begin{center}
+H1: 0 1 1 1\\ 
+H4: 1 0 1 1 \\  
+\end{center}
+
+\textbf{G5 = (H4, H5):} 
+\begin{center}
+H4: 1 0 1 1 \\ 
+H5: 0 0 1 1 \\  
+\end{center}
+
+```{r}
+plot(freqs[,7], type="b", ylab='Log Likelihood', xlab='Iterations', main='Log Likelihood Convergence')
+lines(freqs[,7], col='red')
+```
+
